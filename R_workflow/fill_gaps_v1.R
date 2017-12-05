@@ -77,16 +77,13 @@ library(qrnn)
 library(caret)
 library(tmap)
 
-data_selection <- select_to_test(datos, aimst = 1)
-
 # select stations by distance. It can be either number or code
-select_by_dist(df = data_selection, aimst = 1, sp = estaciones, code_field = 'codigo_estacion',max_st = 3)
+dist_select <- select_by_dist(df = datos, aimst = 1, sp = estaciones, code_field = 'codigo_estacion',max_st = 3)
 
 # select stations by correlation. It can be either number or code
-select_by_corr(df = data_selection, aimst = 1 ,max_st = 3)
+corr_select <- select_by_corr(df = datos, aimst = 1 ,max_st = 3)
 
-
-
+ndata_plot(corr_select[[2]])
 
 # Select only stations under analysis
 estaciones <- estaciones[estaciones$codigo_estacion %in% names(datos),]

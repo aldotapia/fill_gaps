@@ -1,5 +1,6 @@
-select_by_dist <- function(df, aimst, sp, code_field, datecol_pos = 1, max_st = 3,
+select_by_dist <- function(df, aimst, sp, code_field, datecol = T, datecol_pos = 1, max_st = 3,
                            start_date = '1970-01', end_date = '2016-12') {
+  results <- list()
   dates <- df[,datecol_pos]
   df <- df[,-datecol_pos]
   if (!is.numeric(aimst)) {
@@ -11,6 +12,9 @@ select_by_dist <- function(df, aimst, sp, code_field, datecol_pos = 1, max_st = 
   # Select data from start_date to end_date where aim station has NA values
   temp2 <- df[is.na(df[,aimst]) &
                    1:dim(df)[1] %in% which(dates == start_date):which(dates == end_date),]
+  df2 <- cbind.data.frame(dates,df)[which(dates == start_date):which(dates == end_date),]
+  names(df2)[1] <- 'Date'
+  df2[,'Date'] <- as.character(df2[,'Date'])
   # Test stations with complete data in NA period of aim station
   logic_test <- apply(temp2, 2, function(x)sum(is.na(x)) == 0)
   # if there is no possible filling station, go to else
@@ -26,13 +30,22 @@ select_by_dist <- function(df, aimst, sp, code_field, datecol_pos = 1, max_st = 
     dists <- dists[match(sort(dists), dists)]
     if (length(possible_st) > max_st) {
       # return
-      data.frame(stations = c(aim_st, possible_st), distance = c(0,dists),
-               selection = c('Base',rep('Selected',times = max_st),rep('Not selected',times = length(possible_st) - max_st)))
+      rst <- data.frame(stations = c(aim_st, possible_st), distance = c(0,dists),
+               selection = c('Base',rep('Selected',times = max_st),rep('Not selected',times = length(possible_st) - max_st)),stringsAsFactors = F)
     }else{
       # return
-      data.frame(stations = c(aim_st, possible_st), distance = c(0,dists),
-                 selection = c('Base',rep('Selected',times = length(possible_st))))
+      rst <- data.frame(stations = c(aim_st, possible_st), distance = c(0,dists),
+                 selection = c('Base',rep('Selected',times = length(possible_st))),stringsAsFactors = F)
     }
+    rst
+    results[[1]] <- rst
+    selection <- rst[which(rst[,'selection'] %in% c('Base','Selected')),1]
+    if (datecol == T) {
+      results[[2]] <- df2[,c('Date',selection)]
+    }else{
+      results[[2]] <- df2[,selection]
+    }
+    results
   }else{
     print("No station with data to fill!")
   }

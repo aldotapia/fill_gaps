@@ -16,6 +16,9 @@ ndata_plot <- function(df, date_format = 'year-month', date_col = 1, comprss_col
     if (comprss_rowname == T) {
       rownames(ndata)[-seq(1,length(rownames(ndata)),comprss_rowfctor)] <- ''
     }
-    print(matrixplot(ndata))
+    print(levelplot(ndata, scales = list(tck = 0, x = list(rot = 90)),
+                                         col.regions = colorRampPalette(c("red3", "orange", "darkgoldenrod1", 
+                                                                         "yellow", "darkolivegreen2", "green")),
+                                         xlab = NULL, ylab = NULL))
   }
 }
