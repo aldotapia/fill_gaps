@@ -11,13 +11,21 @@ library(hydroTSM)
 library(lattice)
 library(dplyr)
 library(corrplot)
+library(sp)
+library(raster)
 
 # Read precipitation data
 datos <- read.csv(file = "data/cr2_prAmon_2017_ghcn/cr2_prAmon_2017_ghcn.txt",
-                  header = T,skip = 14,sep = ",",na.strings = -9999)
+                  header = T,skip = 14,sep = ",",na.strings = -9999, stringsAsFactors = F)
 
 # Read stations metadata
-estaciones <- read.csv(file = "data/cr2_prAmon_2017_ghcn/cr2_prAmon_2017_stations_ghcn.txt.txt")
+estaciones <- read.csv(file = "data/cr2_prAmon_2017_ghcn/cr2_prAmon_2017_stations_ghcn.txt", stringsAsFactors = F)
+
+# convert stations data.frame to SpatialPointsDataFrame
+estaciones <- SpatialPointsDataFrame(data.frame(estaciones$longitud,estaciones$latitud),
+                                     data = estaciones,
+                                     proj4string = CRS("+proj=longlat +datum=WGS84 +no_defs +ellps=WGS84 +towgs84=0,0,0"))
+
 
 # Assing name by code station
 names(datos) <- c('Fecha',estaciones$codigo_estacion)
@@ -28,28 +36,11 @@ datos <- datos[421:dim(datos)[1],] # data from 1935-01
 ### Limarí River Basin analysis
 ############################
 
-# Create logic test to select stations inside Limarí river basin
-testlogico <- c(TRUE,estaciones$nombre_cuenca == 'Rio Limari')
-
-# Apply selection with logic test
-datos <- datos[,testlogico]
-remove(testlogico) # useless now
-
-# Count valid data per month
-ndata <- apply(datos[,2:39],MARGIN = 1,FUN = function(x){sum(!is.na(x))})
-
-# Create matrix for graphical purposes
-ndata <- matrix(ndata,nrow=12,byrow=F) # warning by number of rows expected
-
-# Assign column name
-colnames(ndata) <- 1935:2017
-
-# Assign row name
-rownames(ndata) <- month.abb
+# Select stations inside Limarí river basin
+datos <- select_basin(df = datos, sta = estaciones, field = 'nombre_cuenca',basin = 'Rio Limari')
 
 # Valid data plot
-matrixplot(ndata)
-remove(ndata) # useless now
+ndata_plot(df = datos, date_format = "year-month",comprss_colfctor = 3)
 
 # Count valid data per station
 datos_validos <- apply(datos[,2:39],2,function(x) sum(!is.na(x)))
@@ -65,45 +56,13 @@ datos <- datos[,c('Fecha',seleccion)]
 remove(seleccion) # useless now
 
 # compute correlation with Kendall (more used method for precipitation)
-corre <- cor(datos[2:(length(datos_validos)+1)],use='na.or.complete',method='kendall')
+corre <- cor(datos[2:(length(datos_validos) + 1)], use = 'na.or.complete' ,method = 'kendall')
 
 # correlation plot
-corrplot(corre,type = "lower", method='pie', tl.col = "black", tl.srt = 15,
+corrplot(corre, type = "lower", method = 'pie', tl.col = "black", tl.srt = 15,
          sig.level = .99)
 
-# summary for lineal model by station
-summary_stations <- list()
-
-# start the loop
-for(i in 1:length(datos_validos)){
-  temp <- datos[,i+1] # data fields
-  
-  temp_list <- list() # create temporal list
-  
-  for(j in 1:(length(datos_validos))){ 
-    temp2 <- datos[,j+1] # data field
-    temp_model <- lm(temp ~ temp2 - 1) # lineal model with center in origin
-    coef <- coefficients(temp_model) # extract slope
-    corr_value <- corre[i,j] # extract correlation by station
-    n_obs <- sum(complete.cases(temp,temp2)) # count number of valid observatioms
-    main_st <- names(datos)[i+1] # extract name of aim station
-    supp_st <- names(datos)[j+1] # extract name of support station
-    # create summary of listed above
-    temp_list[[j]] <- data.frame(Main_station=main_st,Support_station=supp_st,Correlation_value=corr_value,LM_coefficient=coef,n_observation=n_obs)
-  }
-  # save data.frame with summary for station i
-  summary_stations[[i]] <- do.call(rbind.data.frame,temp_list)
-}
-
-# create a unique data.frame with all stations
-summary_stations <- do.call(rbind.data.frame,summary_stations)
-remove(i,j,temp,temp2,temp_list,temp_model,main_st,supp_st,n_obs,coef,corr_value) # ya no se usa
-
-# delete correlation == 1 (aim and support station equal)
-summary_stations <- summary_stations[-which(summary_stations$Correlation_value == 1),]
-
-# delete row name only for aesthetics
-rownames(summary_stations) <- NULL
+summary_stations <- corr_summary(df = datos, only_slope = T)
 
 ######################################
 ######################################
@@ -115,15 +74,19 @@ rownames(summary_stations) <- NULL
 
 # Necessary libraries
 library(qrnn)
-library(sp)
-library(raster)
 library(caret)
 library(tmap)
 
-# convert stations data.frame to SpatialPointsDataFrame
-estaciones <- SpatialPointsDataFrame(data.frame(estaciones$longitud,estaciones$latitud),
-                                     data=estaciones,
-                                     proj4string = CRS("+proj=longlat +datum=WGS84 +no_defs +ellps=WGS84 +towgs84=0,0,0"))
+data_selection <- select_to_test(datos, aimst = 1)
+
+# select stations by distance. It can be either number or code
+select_by_dist(df = data_selection, aimst = 1, sp = estaciones, code_field = 'codigo_estacion',max_st = 3)
+
+# select stations by correlation. It can be either number or code
+select_by_corr(df = data_selection, aimst = 1 ,max_st = 3)
+
+
+
 
 # Select only stations under analysis
 estaciones <- estaciones[estaciones$codigo_estacion %in% names(datos),]
